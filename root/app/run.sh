@@ -70,7 +70,7 @@ esac
 # Child process tracking + signal handling
 # ---------------------------------------------------------------------------
 declare -a PIDS=()
-XVFB_PID=""; OPENBOX_PID=""; X11VNC_PID=""; NOVNC_PID=""; STEAM_PID=""; WATCHDOG_PID=""
+XVFB_PID=""; OPENBOX_PID=""; X11VNC_PID=""; NOVNC_PID=""; STEAM_PID=""; WATCHDOG_PID=""; MAXIMISER_PID=""
 shutting_down=0
 cleanup_done=0
 
@@ -81,8 +81,9 @@ cleanup() {
     shutting_down=1
     log "shutdown requested; stopping children in reverse order..."
 
-    # Stop the watchdog first so it doesn't fire during teardown.
+    # Stop the watchdog and maximiser first so they don't fire during teardown.
     [[ -n "${WATCHDOG_PID}" ]] && kill -TERM "${WATCHDOG_PID}" 2>/dev/null || true
+    [[ -n "${MAXIMISER_PID}" ]] && kill -TERM "${MAXIMISER_PID}" 2>/dev/null || true
 
     # Ask Steam to quit cleanly via its own command (lets it flush state), then
     # fall back to signalling the tracked PID. Steam spawns helpers
@@ -180,6 +181,42 @@ websockify \
     "localhost:${VNC_PORT}" &
 NOVNC_PID=$!
 PIDS+=("${NOVNC_PID}")
+
+# ---------------------------------------------------------------------------
+# 4b) Window maximiser (belt-and-suspenders for the Openbox rules).
+#     The modern Steam UI is rendered by steamwebhelper (CEF). It opens its
+#     window tiny (e.g. 200x200) in the corner and CEF can resize it AFTER map,
+#     sometimes defeating Openbox's <application> rule — leaving a black
+#     screen with a tiny window. This background loop repeatedly moves+resizes
+#     any steam/steamwebhelper window to fill the screen, for a while after
+#     start, then settles into an occasional nudge. Uses wmctrl + xdotool.
+# ---------------------------------------------------------------------------
+maximiser() {
+    local w h deadline
+    w="${SCREEN_RES%%x*}"                 # e.g. 1280
+    local rest="${SCREEN_RES#*x}"
+    h="${rest%%x*}"                        # e.g. 800
+    deadline=$(( $(date +%s) + 600 ))      # actively fix for the first 10 min
+    while :; do
+        [[ "${shutting_down}" -eq 1 ]] && return 0
+        # Find windows whose class is steam/steamwebhelper and force size+pos.
+        while read -r wid; do
+            [[ -n "${wid}" ]] || continue
+            wmctrl -i -r "${wid}" -e "0,0,0,${w},${h}" 2>/dev/null || true
+            wmctrl -i -r "${wid}" -b add,maximized_vert,maximized_horz 2>/dev/null || true
+        done < <(
+            DISPLAY="${DISPLAY}" wmctrl -lx 2>/dev/null \
+                | awk 'tolower($3) ~ /steamwebhelper|^steam\./ {print $1}'
+        )
+        if (( $(date +%s) > deadline )); then
+            sleep 15
+        else
+            sleep 2
+        fi
+    done
+}
+maximiser &
+MAXIMISER_PID=$!
 
 # ---------------------------------------------------------------------------
 # 5) Steam desktop client

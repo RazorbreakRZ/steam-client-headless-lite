@@ -88,6 +88,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         # dbus launcher for the Steam client, curl for HEALTHCHECK, CA certs.
         xauth \
         x11-utils \
+        # wmctrl + xdotool: used by run.sh to force the steamwebhelper (CEF) UI
+        # window to fill the screen (it opens tiny in the corner otherwise).
+        wmctrl \
+        xdotool \
         procps \
         tzdata \
         dbus-x11 \

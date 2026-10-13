@@ -17,7 +17,22 @@
   </placement>
 
   <applications>
-    <!-- Match any Steam window class and make it fill the screen. -->
+    <!-- The modern Steam client renders its ENTIRE UI through steamwebhelper
+         (a CEF/Chromium process). That window carries class "steamwebhelper" /
+         "Steamwebhelper" — NOT "Steam" — and Steam opens it tiny (e.g. 200x200)
+         in the top-left corner, leaving the rest of the framebuffer black.
+         Force it fullscreen so it fills the noVNC viewport. -->
+    <application class="steamwebhelper">
+      <focus>yes</focus>
+      <maximized>yes</maximized>
+      <decor>no</decor>
+    </application>
+    <application class="Steamwebhelper">
+      <focus>yes</focus>
+      <maximized>yes</maximized>
+      <decor>no</decor>
+    </application>
+    <!-- The main Steam window (older/other dialogs). -->
     <application class="Steam">
       <focus>yes</focus>
       <maximized>yes</maximized>
@@ -27,10 +42,6 @@
       <focus>yes</focus>
       <maximized>yes</maximized>
       <decor>no</decor>
-    </application>
-    <!-- Fallback: maximise the first window that appears. -->
-    <application class="*">
-      <maximized>yes</maximized>
     </application>
   </applications>
 </openbox_config>
