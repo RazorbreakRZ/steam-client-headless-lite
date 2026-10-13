@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal Openbox config for the single-app Steam kiosk session.
+  Goal: whatever window Steam opens should be focused and maximised so it fills
+  the noVNC viewport, instead of appearing minimised / unplaced (which looks
+  like a black screen). We keep everything else at Openbox defaults.
+-->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+  </focus>
+
+  <placement>
+    <policy>Smart</policy>
+    <center>yes</center>
+  </placement>
+
+  <applications>
+    <!-- Match any Steam window class and make it fill the screen. -->
+    <application class="Steam">
+      <focus>yes</focus>
+      <maximized>yes</maximized>
+      <decor>no</decor>
+    </application>
+    <application class="steam">
+      <focus>yes</focus>
+      <maximized>yes</maximized>
+      <decor>no</decor>
+    </application>
+    <!-- Fallback: maximise the first window that appears. -->
+    <application class="*">
+      <maximized>yes</maximized>
+    </application>
+  </applications>
+</openbox_config>

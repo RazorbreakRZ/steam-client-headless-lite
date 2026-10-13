@@ -124,10 +124,11 @@ RUN set -eux; \
 # client with autoconnect enabled. The HEALTHCHECK targets /vnc.html regardless.
 
 # -----------------------------------------------------------------------------
-# Bundled web assets (the noVNC landing page). Rarely changes, so copy it in its
-# own layer BEFORE the scripts, so editing a script doesn't re-copy this.
+# Bundled static assets that rarely change (noVNC landing page, Openbox config).
+# Copied BEFORE the scripts so editing a script doesn't re-copy these.
 # -----------------------------------------------------------------------------
 COPY root/usr/ /usr/
+COPY root/etc/ /etc/
 
 # -----------------------------------------------------------------------------
 # Init scripts (change often, but tiny). Copied LAST so a script edit only
@@ -161,7 +162,10 @@ ENV LIBGL_ALWAYS_SOFTWARE=1 \
     VNC_PASSWORD="" \
     VNC_EXPOSE=false \
     CHOWN_ON_START=true \
-    STEAM_ARGS="-silent -no-browser"
+    # NOTE: do NOT use -silent here. -silent starts Steam minimised to the
+    # system tray, but Openbox is a bare WM with no tray, so the window never
+    # shows and noVNC displays only a black screen. We want the window visible.
+    STEAM_ARGS="-no-browser"
 
 LABEL org.opencontainers.image.title="Steam Headless Lite" \
       org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
