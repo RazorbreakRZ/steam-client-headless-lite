@@ -1,0 +1,102 @@
+# =============================================================================
+# steam-client-headless-lite — docker-compose (CasaOS-compatible)
+# -----------------------------------------------------------------------------
+# host networking is REQUIRED for Steam's native LAN content sharing: Local
+# Network Game Transfers rely on UDP broadcast discovery (~27036) plus TCP
+# content transfer (~27040), and broadcast discovery cannot cross Docker's
+# bridge NAT. Under host networking the container uses the host's ports
+# directly, so WEB_PORT must be free on the host.
+# =============================================================================
+name: steam-headless-lite
+
+services:
+  steam-headless-lite:
+    # Change the namespace to your Docker Hub user/org before publishing.
+    image: CHANGE_ME/steam-client-headless-lite:latest
+    container_name: steam-headless-lite
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - TZ=Etc/UTC
+      - WEB_PORT=8080         # noVNC web UI port on the host
+      - VNC_PORT=5900
+      - SCREEN_RES=1280x800x24
+      # Expose the raw VNC port to the LAN only if you set a password:
+      - VNC_EXPOSE=false
+      - VNC_PASSWORD=
+      - CHOWN_ON_START=true
+    volumes:
+      - steam-config:/config  # Steam session + client config (keeps you logged in)
+      - steam-data:/data      # the game library (steamapps). Point this at your storage.
+    restart: unless-stopped
+    # Under network_mode: host the ports below are informational; the container
+    # listens on WEB_PORT/VNC_PORT directly on the host. Steam LAN ports used
+    # natively: UDP/TCP 27015-27036, UDP 27031-27036, ~27036/27040 discovery+xfer.
+
+volumes:
+  steam-config:
+  steam-data:
+
+# -----------------------------------------------------------------------------
+# CasaOS application metadata. Lets this compose import cleanly as a CasaOS app.
+# -----------------------------------------------------------------------------
+x-casaos:
+  architectures:
+    - amd64
+  main: steam-headless-lite
+  author: CHANGE_ME
+  developer: CHANGE_ME
+  category: Gaming
+  title:
+    en_us: Steam Headless Lite
+  tagline:
+    en_us: Headless Steam client for downloading and LAN-sharing a game library.
+  description:
+    en_us: >-
+      A minimal, headless Steam desktop client that downloads a Steam game
+      library and shares it over the LAN using Steam's native Local Network
+      Game Transfers. It never launches games, so it ships no GPU drivers and
+      no desktop environment. Operate it through the web UI (noVNC): accept the
+      Steam Subscriber Agreement on first launch, log in with Steam Guard, add
+      /data as a library folder, and let it download. Requires host networking
+      for LAN peer discovery.
+  icon: https://raw.githubusercontent.com/CHANGE_ME/steam-client-headless-lite/main/.github/icon.png
+  screenshot_link: []
+  scheme: http
+  port_map: "8080"
+  index: /vnc.html
+  tips:
+    before_install:
+      en_us: >-
+        Host networking is required for native Steam LAN content sharing. Make
+        sure the WEB_PORT (default 8080) is free on the host. On first launch,
+        open the web UI, accept the Steam Subscriber Agreement, log in, and add
+        /data as a Steam library folder.
+  envs:
+    - container: WEB_PORT
+      description:
+        en_us: Port for the noVNC web UI on the host (default 8080).
+    - container: PUID
+      description:
+        en_us: User ID that owns files on the volumes.
+    - container: PGID
+      description:
+        en_us: Group ID that owns files on the volumes.
+    - container: TZ
+      description:
+        en_us: Timezone, e.g. Europe/Madrid.
+    - container: VNC_PASSWORD
+      description:
+        en_us: Optional VNC password. Required if VNC_EXPOSE=true.
+    - container: VNC_EXPOSE
+      description:
+        en_us: Expose the raw VNC port to the LAN (requires VNC_PASSWORD). Default false.
+  volumes:
+    - container: /config
+      description:
+        en_us: Steam session and client configuration (keeps you logged in).
+    - container: /data
+      description:
+        en_us: The game library (steamapps). Point this at your storage.

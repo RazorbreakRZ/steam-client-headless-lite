@@ -1,0 +1,16 @@
+# Agent/workflow artifacts
+.agents/
+.worktrees/
+
+# Local env overrides
+.env
+*.local
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Build/runtime leftovers
+*.log
