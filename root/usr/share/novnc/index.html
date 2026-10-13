@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!--
+  Landing page for steam-client-headless-lite.
+  Redirects "/" straight into the noVNC client with autoconnect enabled so the
+  user never sees the "Connect" button. resize=remote fits the remote desktop
+  to the browser window.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Steam Headless Lite</title>
+    <meta http-equiv="refresh"
+          content="0; url=vnc.html?autoconnect=true&amp;reconnect=true&amp;resize=remote" />
+    <script>
+      // Preserve any query string passed to "/" (e.g. a password token) and
+      // forward it, while forcing autoconnect/reconnect/resize defaults.
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        params.set("autoconnect", "true");
+        params.set("reconnect", "true");
+        if (!params.has("resize")) params.set("resize", "remote");
+        window.location.replace("vnc.html?" + params.toString());
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Connecting to Steam Headless Lite&hellip;
+       If you are not redirected,
+       <a href="vnc.html?autoconnect=true&amp;reconnect=true&amp;resize=remote">click here</a>.
+    </p>
+  </body>
+</html>

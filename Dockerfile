@@ -98,9 +98,11 @@ RUN set -eux; \
         ca-certificates \
     ; \
     # noVNC ships vnc.html / vnc_lite.html / vnc_auto.html (vnc_auto.html is a
-    # symlink to vnc.html). There is genuinely NO index.html, so create one so
-    # the web root "/" and the HEALTHCHECK on /vnc.html both resolve cleanly.
-    ln -sf vnc.html /usr/share/novnc/index.html; \
+    # symlink to vnc.html). There is genuinely NO index.html. We DON'T symlink
+    # one here: a custom index.html is provided via `COPY root/ /` below
+    # (root/usr/share/novnc/index.html) that auto-redirects "/" into the noVNC
+    # client with autoconnect enabled, so the user never sees the Connect button.
+    # The HEALTHCHECK targets /vnc.html (always present) regardless.
     # --- non-root runtime user; IDs are re-mapped at start by entrypoint.sh ---
     groupadd -g "${PGID}" steam; \
     useradd -u "${PUID}" -g "${PGID}" -d /config -s /usr/sbin/nologin -M steam; \

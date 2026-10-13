@@ -66,7 +66,9 @@ x-casaos:
   screenshot_link: []
   scheme: http
   port_map: "28080"
-  index: /vnc.html
+  # Open the noVNC client with autoconnect so no "Connect" button is shown.
+  # (Entering "/" also works: a custom index.html redirects with the same args.)
+  index: /vnc.html?autoconnect=true&reconnect=true&resize=remote
   tips:
     before_install:
       en_us: >-

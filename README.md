@@ -57,8 +57,8 @@ Xvfb  ->  Openbox  ->  x11vnc  ->  noVNC/websockify  ->  Steam client
    docker compose up -d
    ```
 
-3. Open the web UI at `http://<host>:28080/vnc.html` and follow
-   [First-run setup](#first-run-setup).
+3. Open the web UI at `http://<host>:28080/` (it auto-connects, no "Connect"
+   button) and follow [First-run setup](#first-run-setup).
 
 ### With docker run
 
@@ -78,7 +78,7 @@ docker run -d \
 
 ## First-run setup
 
-Open `http://<host>:28080/vnc.html` and, **in this order**:
+Open `http://<host>:28080/` (the session auto-connects) and, **in this order**:
 
 1. **Accept the Steam Subscriber Agreement.** On first launch the Steam client
    shows its license / Subscriber Agreement dialog in the noVNC window. This is
@@ -154,7 +154,10 @@ import it as a CasaOS app:
 3. Set the image namespace, `WEB_PORT`, `TZ`, and the `/data` storage path.
 4. Install, open the app's web UI, and follow [First-run setup](#first-run-setup).
 
-The main entry point is the web UI on `WEB_PORT` with index `/vnc.html`.
+The main entry point is the web UI on `WEB_PORT`. The CasaOS `index` opens noVNC
+with `autoconnect=true`, so no "Connect" button is shown — the session connects
+automatically. Opening the web root `/` works too: a bundled `index.html`
+redirects into the client with the same autoconnect parameters.
 
 ## Building locally
 
