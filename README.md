@@ -23,9 +23,9 @@ image — but stripped down to the essentials for a download-and-share node.
 
 - A way to *play* games. It never launches titles.
 - A GPU/streaming box. It ships **no GPU drivers**, **no Vulkan**, and **no
-  desktop environment** — only Mesa **software** rendering (llvmpipe), which is
-  the minimum needed for the Steam client's own UI to render into a virtual
-  framebuffer.
+  desktop environment** — only Mesa **software** rendering (llvmpipe). The Steam
+  client's own UI is drawn by `steamwebhelper` (a CEF/Chromium process) which
+  renders in software on the CPU; no GPU is required (or used).
 - A LanCache replacement (see [LAN sharing](#lan-content-sharing) below).
 
 ## How it works
@@ -37,11 +37,17 @@ Xvfb  ->  Openbox  ->  x11vnc  ->  noVNC/websockify  ->  Steam client
 ```
 
 - **Base:** `debian:bookworm-slim` with i386 multiarch (Steam needs 32-bit libs).
-- **Steam:** Debian's `steam-installer` package (from `contrib`).
-- **Rendering:** Mesa software only (`LIBGL_ALWAYS_SOFTWARE=1`, llvmpipe).
+- **Steam:** Debian's `steam-installer` package (from `contrib`). The real
+  client is downloaded into `/config` on first run and persists there.
+- **Rendering:** software only. The client UI (`steamwebhelper`, CEF/Chromium)
+  rasterises on the CPU; Mesa/llvmpipe is present for the few GL bits that need
+  it. No GPU is used.
 - **Init:** `tini` as PID 1, then `gosu` drops to a non-root `steam` user. A
-  single bash supervisor (`run.sh`) starts the stack, forwards signals, and
-  distinguishes a clean stop (exit 0) from a Steam crash (real exit code).
+  single bash supervisor (`run.sh`) starts the stack and forwards signals. It
+  **relaunches Steam** when it restarts itself (e.g. after a client update,
+  which exits with code 71) instead of tearing the container down, and a
+  watchdog triggers a clean container exit only if the core infrastructure
+  (Xvfb/x11vnc/noVNC) dies.
 - **linuxserver-style** `PUID`/`PGID`/`UMASK` so files on the volumes get the
   ownership you want.
 
@@ -66,6 +72,10 @@ Xvfb  ->  Openbox  ->  x11vnc  ->  noVNC/websockify  ->  Steam client
 docker run -d \
   --name steam-headless-lite \
   --network host \
+  --shm-size=2g \
+  --security-opt seccomp=unconfined \
+  --security-opt apparmor=unconfined \
+  --cap-add SYS_ADMIN \
   -e PUID=1000 -e PGID=1000 -e TZ=Europe/Madrid \
   -e WEB_PORT=28080 \
   -v steam-config:/config \
@@ -73,8 +83,12 @@ docker run -d \
   razorbreak/steam-client-headless-lite:latest
 ```
 
-> **Host networking is required** for native LAN sharing (see below). Make sure
-> `WEB_PORT` is free on the host.
+> Three runtime options are **required** or the client won't start / stays
+> black: `--shm-size=2g` (CEF renderer, see
+> [Shared memory](#shared-memory-required)), the `--security-opt` /
+> `--cap-add SYS_ADMIN` pair (Steam user namespaces, see
+> [User namespaces](#user-namespaces-required)), and host networking (native LAN
+> sharing). Make sure `WEB_PORT` is free on the host.
 
 ## First-run setup
 
@@ -126,6 +140,25 @@ These settings are a deliberate trade-off: this is a trusted, LAN-only download
 node (and it already runs with host networking), so relaxing the container
 sandbox is acceptable here. Do not copy these options onto untrusted workloads.
 
+## Shared memory (required)
+
+The Steam UI is rendered by `steamwebhelper` (CEF/Chromium). Chromium needs a
+large `/dev/shm`; Docker's **64 MB default is too small** and makes the renderer
+fail — the Steam window stays **completely black** even though the client is
+running and the menus work. The compose files set a generous value:
+
+```yaml
+shm_size: "2gb"
+```
+
+With `docker run`, pass `--shm-size=2g`. If you ever see a black noVNC screen
+with a logged-in-but-blank Steam window, this is the first thing to check.
+
+> Note: a line like `Exiting GPU process due to errors during initialization`
+> in the Steam logs is expected and harmless here — CEF's GPU process does not
+> initialise under software rendering, so CEF falls back to CPU rasterisation,
+> which works. The black screen is caused by `/dev/shm`, not by that message.
+
 ## Data persistence
 
 | Volume    | Purpose                                                        |
@@ -174,7 +207,7 @@ updates to the other, avoiding a re-download from the internet.
 | `VNC_PASSWORD`   | *(empty)*      | Optional VNC password. **Required** if `VNC_EXPOSE=true`. |
 | `VNC_EXPOSE`     | `false`        | Expose the raw VNC port to the LAN. Requires a password or the container refuses to start. By default VNC binds to localhost and is reachable only through the web UI. |
 | `CHOWN_ON_START` | `true`         | Fix ownership of `/config` (recursively) and `/data` (top level) at start. Set `false` on huge libraries where ownership is already correct. |
-| `STEAM_ARGS`     | `-silent -no-browser` | Extra arguments passed to the Steam client. |
+| `STEAM_ARGS`     | `-no-browser -cef-force-gpu-mesa` | Arguments passed to the Steam client. `-cef-force-gpu-mesa` points CEF at the software GL path for headless rendering. Do **not** add `-silent` (it minimises Steam to a nonexistent tray → black screen). |
 
 ## CasaOS
 
@@ -236,7 +269,37 @@ git push origin v0.1.0
 This triggers `docker-publish.yml` and publishes
 `<namespace>/steam-client-headless-lite:0.1.0` and `:latest`.
 
+## Troubleshooting
+
+**Black noVNC screen, but the container is running.** The usual causes, in order
+of likelihood:
+
+1. **`/dev/shm` too small.** The most common cause. Set `shm_size: "2gb"`
+   (compose) or `--shm-size=2g` (run). See [Shared memory](#shared-memory-required).
+2. **Missing user-namespace options.** If the logs show *"Steam now requires
+   user namespaces to be enabled"*, add the `security_opt` / `cap_add SYS_ADMIN`
+   options. See [User namespaces](#user-namespaces-required).
+3. **A blocking first-run dialog.** The Debian `steam-installer` shows a
+   zenity "Install?" dialog on a fresh install; this image answers it
+   automatically via a bundled `zenity` wrapper, so you shouldn't hit it, but if
+   you replace that wrapper the dialog will block startup.
+
+**"Steam now requires user namespaces to be enabled."** See
+[User namespaces](#user-namespaces-required). The host must allow unprivileged
+user namespaces and the container must relax seccomp/AppArmor + add `SYS_ADMIN`.
+
+**Steam exits with code 71 and the container keeps running.** Expected. Steam
+restarts itself after installing a client update ("Restarting Steam by
+request..."); the supervisor relaunches it automatically and keeps the web
+session alive. Only a genuine crash-loop (many restarts in a short window) is
+treated as fatal.
+
+**The Steam window is tiny / in a corner.** The UI window
+(`steamwebhelper`) can open small; a background maximiser in `run.sh` resizes it
+to fill the screen. If it misbehaves, the window class to target is
+`steamwebhelper`.
+
 ## License
 
-MIT (add a `LICENSE` file). This project is not affiliated with Valve. Steam is
-a trademark of Valve Corporation.
+MIT — see the [`LICENSE`](LICENSE) file. This project is not affiliated with
+Valve. Steam is a trademark of Valve Corporation.
