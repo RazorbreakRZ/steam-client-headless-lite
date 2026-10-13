@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Steam Headless Lite">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2838"/>
+      <stop offset="1" stop-color="#0e1621"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#66c0f4"/>
+      <stop offset="1" stop-color="#1a9fff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- download arrow (library download node) -->
+  <g fill="url(#accent)">
+    <rect x="236" y="120" width="40" height="150" rx="20"/>
+    <path d="M256 300 L196 230 h120 Z"/>
+  </g>
+
+  <!-- storage / library tray -->
+  <rect x="146" y="322" width="220" height="40" rx="14" fill="#c7d5e0"/>
+
+  <!-- LAN nodes: three dots linked, representing native LAN sharing -->
+  <g stroke="#66c0f4" stroke-width="10" fill="#66c0f4">
+    <line x1="186" y1="420" x2="256" y2="400"/>
+    <line x1="326" y1="420" x2="256" y2="400"/>
+    <circle cx="256" cy="400" r="20"/>
+    <circle cx="186" cy="420" r="18"/>
+    <circle cx="326" cy="420" r="18"/>
+  </g>
+</svg>
