@@ -9,54 +9,41 @@
 # web (noVNC).
 #
 # A light, linuxserver.io-style image: PUID/PGID/UMASK, tini as PID 1, gosu drop.
+#
+# -----------------------------------------------------------------------------
+# LAYER ORDERING FOR BUILD CACHE
+# -----------------------------------------------------------------------------
+# Layers are ordered cheapest-to-invalidate LAST:
+#   1. FROM + the single apt install (huge, ~hundreds of MB, rarely changes)
+#   2. static tweaks that depend only on installed files (user, dirs, index.html)
+#   3. init scripts (change often, but tiny)
+#   4. runtime ENV defaults (ports, args — change often, zero-cost layers)
+#   5. metadata (LABEL/EXPOSE/HEALTHCHECK/ENTRYPOINT)
+# Nothing that changes frequently sits ABOVE the apt layer, so editing a port
+# default or a script never re-triggers the expensive package download.
 # =============================================================================
 FROM debian:bookworm-slim
 
-LABEL org.opencontainers.image.title="Steam Headless Lite" \
-      org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
-      org.opencontainers.image.source="https://github.com/RazorbreakRZ/steam-client-headless-lite" \
-      org.opencontainers.image.licenses="MIT"
-
-# Non-interactive apt is the real safety net here. steam-installer's only debconf
-# templates are steam/need-nvidia-i386 (preinst note, emitted ONLY when an Nvidia
-# kernel module is present — never in this driverless container) and steam/purge.
-# It presents NO install-time EULA prompt, so there is nothing to pre-accept via
-# debconf-set-selections. The Steam Subscriber Agreement is accepted by the user
-# in the GUI on first launch (see README first-run flow).
-ENV DEBIAN_FRONTEND=noninteractive \
-    LIBGL_ALWAYS_SOFTWARE=1 \
-    GALLIUM_DRIVER=llvmpipe \
-    # steam-installer puts the launcher in /usr/games; make sure it's on PATH
-    # (run.sh also resolves the binary explicitly as a belt-and-suspenders).
-    PATH="/usr/games:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    # ----- Runtime defaults (overridable at `docker run`/compose) -----
-    PUID=1000 \
-    PGID=1000 \
-    UMASK=022 \
-    TZ=Etc/UTC \
-    # High, uncommon defaults chosen so they don't collide with typical host
-    # services under network_mode: host (8080/5900 clash with proxies, panels,
-    # and real VNC servers; these also sit above Steam's native LAN port range).
-    WEB_PORT=28080 \
-    VNC_PORT=28090 \
-    DISPLAY_NUM=99 \
-    SCREEN_RES=1280x800x24 \
-    VNC_PASSWORD="" \
-    VNC_EXPOSE=false \
-    CHOWN_ON_START=true \
-    STEAM_ARGS="-silent -no-browser" \
-    HOME=/config
+# Only the ENV that influences the apt install itself goes above the install
+# layer. Everything else (ports, Mesa flags, PATH, HOME, PUID...) is set AFTER
+# install so changing those values never invalidates the package layer.
+ENV DEBIAN_FRONTEND=noninteractive
 
 # -----------------------------------------------------------------------------
-# Single install layer. steam-installer lives in contrib, so we rewrite the
-# deb822 sources to add contrib (anchored sed, guarded by a grep so we only
-# touch it once), enable i386 multiarch for Steam's 32-bit libs, install the
-# minimal GUI + VNC + Mesa-software + init stack, then purge apt lists.
+# Single install layer (the expensive one). steam-installer lives in contrib, so
+# we rewrite the deb822 sources to add contrib (anchored sed, guarded by a grep),
+# enable i386 multiarch for Steam's 32-bit libs, install the minimal
+# GUI + VNC + Mesa-software + init stack, then purge apt lists.
+#
+# steam-installer's only debconf templates are steam/need-nvidia-i386 (preinst
+# note, emitted ONLY when an Nvidia kernel module is present — never here) and
+# steam/purge. It presents NO install-time EULA prompt, so there is nothing to
+# pre-accept via debconf. DEBIAN_FRONTEND=noninteractive is the real safety net.
+# The Steam Subscriber Agreement is accepted by the user in the GUI on first run.
 #
 # Versions are intentionally NOT pinned with `=`: xvfb, tzdata, websockify, tini
 # and gosu carry point-release / binNMU churn in bookworm that would break an
-# exact pin. We install by name and let apt resolve within the suite. Known-good
-# versions at authoring time are noted in comments only.
+# exact pin. We install by name and let apt resolve within the suite.
 # -----------------------------------------------------------------------------
 RUN set -eux; \
     # --- enable contrib component (deb822 format in bookworm) ---
@@ -78,9 +65,9 @@ RUN set -eux; \
         xvfb \
         openbox \
         x11vnc \
-        # noVNC web client. The `websockify` CLI (/usr/bin/websockify) is actually
-        # shipped by python3-websockify, a hard dependency of the websockify pkg;
-        # we install both explicitly so the dependency is obvious.
+        # noVNC web client. The `websockify` CLI (/usr/bin/websockify) is
+        # shipped by python3-websockify, a hard dependency of websockify; we
+        # install both explicitly so the dependency is obvious.
         novnc \
         websockify \
         python3-websockify \
@@ -97,35 +84,81 @@ RUN set -eux; \
         curl \
         ca-certificates \
     ; \
-    # noVNC ships vnc.html / vnc_lite.html / vnc_auto.html (vnc_auto.html is a
-    # symlink to vnc.html). There is genuinely NO index.html. We DON'T symlink
-    # one here: a custom index.html is provided via `COPY root/ /` below
-    # (root/usr/share/novnc/index.html) that auto-redirects "/" into the noVNC
-    # client with autoconnect enabled, so the user never sees the Connect button.
-    # The HEALTHCHECK targets /vnc.html (always present) regardless.
-    # --- non-root runtime user; IDs are re-mapped at start by entrypoint.sh ---
-    groupadd -g "${PGID}" steam; \
-    useradd -u "${PUID}" -g "${PGID}" -d /config -s /usr/sbin/nologin -M steam; \
-    mkdir -p /config /data; \
-    chown -R steam:steam /config /data; \
-    # X11 unix socket dir: pre-create with the sticky bit so Xvfb (running as the
-    # non-root steam user) doesn't warn "euid != 0 ... /tmp/.X11-unix will not be
-    # created" and so the socket lands in a dir everyone can use.
-    mkdir -p /tmp/.X11-unix; \
-    chmod 1777 /tmp/.X11-unix; \
     # --- slim down ---
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
            /usr/share/man/* /usr/share/doc/* /usr/share/info/*
 
-# Init scripts: COPY root/ / maps root/app/*.sh -> /app/*.sh
-COPY root/ /
+# -----------------------------------------------------------------------------
+# Static image setup that depends only on the installed packages. Kept in its
+# own layer, AFTER the install, so it rebuilds cheaply and does not invalidate
+# the package layer. The steam user is created with fixed 1000:1000; the real
+# uid/gid remapping happens at runtime in entrypoint.sh from PUID/PGID, so the
+# build-time values here are placeholders and intentionally NOT build args.
+# -----------------------------------------------------------------------------
+RUN set -eux; \
+    groupadd -g 1000 steam; \
+    useradd -u 1000 -g 1000 -d /config -s /usr/sbin/nologin -M steam; \
+    mkdir -p /config /data; \
+    chown -R steam:steam /config /data; \
+    # X11 unix socket dir with sticky bit so Xvfb (as non-root) doesn't warn
+    # "euid != 0 ... /tmp/.X11-unix will not be created".
+    mkdir -p /tmp/.X11-unix; \
+    chmod 1777 /tmp/.X11-unix
+# noVNC ships vnc.html / vnc_lite.html / vnc_auto.html (vnc_auto.html -> vnc.html
+# symlink). There is genuinely NO index.html; a custom one is provided by the
+# COPY below (root/usr/share/novnc/index.html) that auto-redirects "/" into the
+# client with autoconnect enabled. The HEALTHCHECK targets /vnc.html regardless.
+
+# -----------------------------------------------------------------------------
+# Bundled web assets (the noVNC landing page). Rarely changes, so copy it in its
+# own layer BEFORE the scripts, so editing a script doesn't re-copy this.
+# -----------------------------------------------------------------------------
+COPY root/usr/ /usr/
+
+# -----------------------------------------------------------------------------
+# Init scripts (change often, but tiny). Copied LAST so a script edit only
+# invalidates these two trailing layers.
+# -----------------------------------------------------------------------------
+COPY root/app/ /app/
 RUN chmod +x /app/*.sh
+
+# -----------------------------------------------------------------------------
+# Runtime ENV defaults (overridable at `docker run`/compose). These sit BELOW
+# everything expensive, so editing a port or an arg produces a near-instant
+# rebuild of only these trailing metadata layers.
+# -----------------------------------------------------------------------------
+ENV LIBGL_ALWAYS_SOFTWARE=1 \
+    GALLIUM_DRIVER=llvmpipe \
+    # steam-installer puts the launcher in /usr/games; make sure it's on PATH
+    # (run.sh also resolves the binary explicitly as a belt-and-suspenders).
+    PATH="/usr/games:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    HOME=/config \
+    PUID=1000 \
+    PGID=1000 \
+    UMASK=022 \
+    TZ=Etc/UTC \
+    # High, uncommon defaults so they don't collide with typical host services
+    # under network_mode: host (8080/5900 clash with proxies, panels, real VNC;
+    # these also sit above Steam's native LAN port range).
+    WEB_PORT=28080 \
+    VNC_PORT=28090 \
+    DISPLAY_NUM=99 \
+    SCREEN_RES=1280x800x24 \
+    VNC_PASSWORD="" \
+    VNC_EXPOSE=false \
+    CHOWN_ON_START=true \
+    STEAM_ARGS="-silent -no-browser"
+
+LABEL org.opencontainers.image.title="Steam Headless Lite" \
+      org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
+      org.opencontainers.image.source="https://github.com/RazorbreakRZ/steam-client-headless-lite" \
+      org.opencontainers.image.licenses="MIT"
 
 VOLUME ["/config", "/data"]
 
-# Documentation only; actual published port is WEB_PORT (default 28080). Under the
-# recommended network_mode: host these EXPOSE lines are informational.
+# Documentation only; actual published port is WEB_PORT (default 28080). Under
+# the recommended network_mode: host these EXPOSE lines are informational.
 EXPOSE 28080
 EXPOSE 28090
 
