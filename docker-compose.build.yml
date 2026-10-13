@@ -1,0 +1,47 @@
+# =============================================================================
+# docker-compose.build.yml — LOCAL BUILD & STARTUP VALIDATION
+# -----------------------------------------------------------------------------
+# Minimal compose for building the image from the local Dockerfile and testing
+# that it starts. NO CasaOS metadata, NO Docker Hub image pull — it builds here.
+#
+# Usage:
+#   docker compose -f docker-compose.build.yml build
+#   docker compose -f docker-compose.build.yml up            # foreground, see logs
+#   docker compose -f docker-compose.build.yml up -d         # detached
+#   docker compose -f docker-compose.build.yml logs -f       # follow logs
+#   docker compose -f docker-compose.build.yml down          # stop + remove
+#
+# Uses network_mode: host (same as production) so you reproduce the real startup
+# path. If WEB_PORT/VNC_PORT are busy on the host, override them inline, e.g.:
+#   WEB_PORT=38080 docker compose -f docker-compose.build.yml up
+# =============================================================================
+name: steam-headless-lite-build
+
+services:
+  steam-headless-lite:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: steam-client-headless-lite:local
+    container_name: steam-headless-lite-build
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - TZ=${TZ:-Etc/UTC}
+      - WEB_PORT=${WEB_PORT:-28080}
+      - VNC_PORT=${VNC_PORT:-28090}
+      - SCREEN_RES=1280x800x24
+      - VNC_EXPOSE=false
+      - VNC_PASSWORD=
+      # First boot does a recursive chown of /config; on a fresh empty volume
+      # this is instant. Set false if you ever point /config at a huge tree and
+      # the chown makes startup look stuck.
+      - CHOWN_ON_START=true
+    volumes:
+      # Local bind mounts so you can inspect what the container writes while
+      # debugging. Created on first run next to this compose file.
+      - ./.local/config:/config
+      - ./.local/data:/data
+    restart: "no"

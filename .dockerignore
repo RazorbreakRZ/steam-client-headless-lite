@@ -8,3 +8,5 @@ LICENSE
 *.md
 .agents
 .worktrees
+.local
+docker-compose.build.yml
