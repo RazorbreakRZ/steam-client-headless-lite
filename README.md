@@ -94,6 +94,38 @@ Open `http://<host>:28080/` (the session auto-connects) and, **in this order**:
 4. **Download games.** Install the titles you want; they land in
    `/data/steamapps/`.
 
+## User namespaces (required)
+
+Modern Steam clients abort with **"Steam now requires user namespaces to be
+enabled."** unless their runtime sandbox (bubblewrap / pressure-vessel) can
+create nested user namespaces. Inside Docker two layers block this by default:
+
+- **The container**: Docker's default `seccomp` and `AppArmor` profiles block
+  the `clone`/`unshare` calls that create a user namespace. The provided compose
+  files relax both and add `SYS_ADMIN`:
+
+  ```yaml
+  security_opt:
+    - seccomp=unconfined
+    - apparmor=unconfined
+  cap_add:
+    - SYS_ADMIN
+  ```
+
+- **The host**: unprivileged user namespaces must be allowed. On most kernels
+  this is already the case. On Debian/Ubuntu, verify:
+
+  ```bash
+  sysctl kernel.unprivileged_userns_clone   # should be 1
+  # if 0, enable it:
+  echo 'kernel.unprivileged_userns_clone=1' | sudo tee /etc/sysctl.d/99-userns.conf
+  sudo sysctl --system
+  ```
+
+These settings are a deliberate trade-off: this is a trusted, LAN-only download
+node (and it already runs with host networking), so relaxing the container
+sandbox is acceptable here. Do not copy these options onto untrusted workloads.
+
 ## Data persistence
 
 | Volume    | Purpose                                                        |

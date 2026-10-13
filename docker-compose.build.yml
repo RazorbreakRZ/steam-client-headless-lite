@@ -25,6 +25,17 @@ services:
     image: steam-client-headless-lite:local
     container_name: steam-headless-lite-build
     network_mode: host
+    # Steam's runtime sandbox (bubblewrap / pressure-vessel) needs to create
+    # nested user namespaces, or it aborts with
+    # "Steam now requires user namespaces to be enabled."
+    # Docker's default seccomp + AppArmor profiles block that inside a container,
+    # so relax both and grant SYS_ADMIN. The host already allows unprivileged
+    # userns (kernel.unprivileged_userns_clone=1), so no host sysctl is needed.
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    cap_add:
+      - SYS_ADMIN
     environment:
       - PUID=1000
       - PGID=1000

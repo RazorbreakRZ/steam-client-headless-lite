@@ -45,7 +45,17 @@ ENV DEBIAN_FRONTEND=noninteractive
 # and gosu carry point-release / binNMU churn in bookworm that would break an
 # exact pin. We install by name and let apt resolve within the suite.
 # -----------------------------------------------------------------------------
-RUN set -eux; \
+# The two cache mounts persist apt's package cache and lists across builds in the
+# BuildKit builder (NOT in the final image). Even when this layer is invalidated,
+# apt reuses already-downloaded .deb files instead of re-fetching them — a big
+# saving on metered/limited connections. `sharing=locked` serialises concurrent
+# builds. We must disable apt's own auto-clean (docker-clean) so the cache mount
+# actually retains the .debs.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -eux; \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache; \
     # --- enable contrib component (deb822 format in bookworm) ---
     if ! grep -q 'contrib' /etc/apt/sources.list.d/debian.sources; then \
         sed -i -E 's/^(Components:.*)$/\1 contrib/' /etc/apt/sources.list.d/debian.sources; \
@@ -84,9 +94,12 @@ RUN set -eux; \
         curl \
         ca-certificates \
     ; \
-    # --- slim down ---
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    # --- slim down the FINAL image ---
+    # NOTE: with the apt cache mounts above, /var/cache/apt and /var/lib/apt are
+    # build-time caches that are NOT written into the image layer, so there's no
+    # need (and it would be counterproductive) to `apt-get clean` them here.
+    # We only strip docs/man/info and temp dirs, which DO live in the layer.
+    rm -rf /tmp/* /var/tmp/* \
            /usr/share/man/* /usr/share/doc/* /usr/share/info/*
 
 # -----------------------------------------------------------------------------

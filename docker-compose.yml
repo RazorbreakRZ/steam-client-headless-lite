@@ -15,6 +15,18 @@ services:
     image: razorbreak/steam-client-headless-lite:latest
     container_name: steam-headless-lite
     network_mode: host
+    # Steam's runtime sandbox (bubblewrap / pressure-vessel) must create nested
+    # user namespaces, or it aborts with
+    # "Steam now requires user namespaces to be enabled."
+    # Docker's default seccomp + AppArmor profiles block that inside a container.
+    # Relaxing both and granting SYS_ADMIN is required for the Steam client to
+    # start. The host must also allow unprivileged user namespaces (on Debian/
+    # Ubuntu: sysctl kernel.unprivileged_userns_clone=1, usually the default).
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    cap_add:
+      - SYS_ADMIN
     environment:
       - PUID=1000
       - PGID=1000
