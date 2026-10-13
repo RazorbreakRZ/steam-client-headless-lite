@@ -70,17 +70,33 @@ esac
 # Child process tracking + signal handling
 # ---------------------------------------------------------------------------
 declare -a PIDS=()
-XVFB_PID=""; OPENBOX_PID=""; X11VNC_PID=""; NOVNC_PID=""; STEAM_PID=""
+XVFB_PID=""; OPENBOX_PID=""; X11VNC_PID=""; NOVNC_PID=""; STEAM_PID=""; WATCHDOG_PID=""
 shutting_down=0
+cleanup_done=0
 
 cleanup() {
+    # Idempotent: the trap and the normal exit paths may both call this.
+    [[ "${cleanup_done}" -eq 1 ]] && return 0
+    cleanup_done=1
     shutting_down=1
     log "shutdown requested; stopping children in reverse order..."
+
+    # Stop the watchdog first so it doesn't fire during teardown.
+    [[ -n "${WATCHDOG_PID}" ]] && kill -TERM "${WATCHDOG_PID}" 2>/dev/null || true
+
+    # Ask Steam to quit cleanly via its own command (lets it flush state), then
+    # fall back to signalling the tracked PID. Steam spawns helpers
+    # (steamwebhelper, reaper, ...) that must also be reaped.
+    if [[ -n "${STEAM_BIN:-}" ]]; then
+        "${STEAM_BIN}" -shutdown >/dev/null 2>&1 || true
+    fi
+
     for pid in "${STEAM_PID}" "${NOVNC_PID}" "${X11VNC_PID}" "${OPENBOX_PID}" "${XVFB_PID}"; do
         if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
             kill -TERM "${pid}" 2>/dev/null || true
         fi
     done
+
     # give them a moment, then hard-kill stragglers
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         local alive=0
@@ -93,6 +109,10 @@ cleanup() {
     for pid in "${STEAM_PID}" "${NOVNC_PID}" "${X11VNC_PID}" "${OPENBOX_PID}" "${XVFB_PID}"; do
         [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null && kill -KILL "${pid}" 2>/dev/null || true
     done
+
+    # Sweep any Steam helper processes left behind (best effort).
+    pkill -TERM -f 'steamwebhelper' 2>/dev/null || true
+    pkill -TERM -f '/steam/'        2>/dev/null || true
 }
 # Trap BEFORE starting any child.
 trap cleanup SIGTERM SIGINT
@@ -185,26 +205,81 @@ if [[ -z "${STEAM_BIN}" ]]; then
 fi
 [[ -n "${STEAM_BIN}" ]] || die "Steam launcher not found (looked in /usr/games/steam, /usr/bin/steam, /usr/local/bin/steam and PATH)."
 
-log "starting Steam client: ${STEAM_BIN} ${STEAM_ARGS}"
-# shellcheck disable=SC2086
-"${STEAM_BIN}" ${STEAM_ARGS} &
-STEAM_PID=$!
-PIDS+=("${STEAM_PID}")
-
-log "all services started. Web UI: http://<host>:${WEB_PORT}/vnc.html"
+log "all infrastructure started. Web UI: http://<host>:${WEB_PORT}/vnc.html"
 
 # ---------------------------------------------------------------------------
-# Wait for the first child to exit, then decide clean-vs-crash.
+# Steam supervision loop.
+#
+# WHY A LOOP: Steam legitimately restarts ITSELF. After installing a client
+# update it prints "Restarting Steam by request..." and the original steam.sh
+# exits (commonly with code 71 / EX_OSERR) before relaunching. It also exits
+# when the user quits from the UI. A one-shot `wait -n` would treat that normal
+# self-restart as a crash and tear the whole container down — which is exactly
+# what happened. So we run Steam in the FOREGROUND and relaunch it when it
+# exits, unless we're shutting down. A sliding-window counter guards against a
+# genuine crash-loop (Steam dying repeatedly in a short span).
+#
+# Meanwhile a lightweight watchdog checks the infrastructure PIDs; if Xvfb /
+# x11vnc / noVNC die, that IS fatal and we exit so Docker restarts us clean.
 # ---------------------------------------------------------------------------
-wait -n
-code=$?
 
-if [[ "${shutting_down}" -eq 1 ]]; then
-    log "clean shutdown (signal received); exiting 0"
-    cleanup
-    exit 0
-fi
+STEAM_MAX_RESTARTS="${STEAM_MAX_RESTARTS:-5}"   # max restarts within the window
+STEAM_RESTART_WINDOW="${STEAM_RESTART_WINDOW:-60}"  # seconds
 
-warn "a child process exited unexpectedly (code ${code}); tearing down."
-cleanup
-exit "${code}"
+# Infrastructure watchdog: runs in the background, exits (killing run.sh via a
+# SIGTERM to the process group) if any core service dies while not shutting down.
+infra_watchdog() {
+    while :; do
+        sleep 5
+        [[ "${shutting_down}" -eq 1 ]] && return 0
+        for svc_pid in "${XVFB_PID}" "${X11VNC_PID}" "${NOVNC_PID}"; do
+            if [[ -n "${svc_pid}" ]] && ! kill -0 "${svc_pid}" 2>/dev/null; then
+                warn "infrastructure process ${svc_pid} died; triggering shutdown."
+                # Signal the main shell to tear down with a non-zero result.
+                kill -TERM $$ 2>/dev/null || true
+                return 1
+            fi
+        done
+    done
+}
+infra_watchdog &
+WATCHDOG_PID=$!
+
+restart_count=0
+window_start=$(date +%s)
+
+while :; do
+    log "starting Steam client: ${STEAM_BIN} ${STEAM_ARGS}"
+    # Foreground: block here until THIS steam invocation exits.
+    # shellcheck disable=SC2086
+    "${STEAM_BIN}" ${STEAM_ARGS} &
+    STEAM_PID=$!
+    wait "${STEAM_PID}"
+    code=$?
+    STEAM_PID=""
+
+    # Shutting down? Clean exit regardless of Steam's code.
+    if [[ "${shutting_down}" -eq 1 ]]; then
+        log "clean shutdown (signal received); exiting 0"
+        cleanup
+        exit 0
+    fi
+
+    # Steam exited on its own (self-restart after update, or user quit).
+    now=$(date +%s)
+    if (( now - window_start > STEAM_RESTART_WINDOW )); then
+        # Window elapsed without a crash-loop; reset the counter.
+        window_start=${now}
+        restart_count=0
+    fi
+    restart_count=$((restart_count + 1))
+
+    if (( restart_count > STEAM_MAX_RESTARTS )); then
+        warn "Steam exited ${restart_count} times within ${STEAM_RESTART_WINDOW}s (last code ${code}); treating as a crash-loop."
+        cleanup
+        exit "${code}"
+    fi
+
+    log "Steam exited (code ${code}); relaunching (${restart_count}/${STEAM_MAX_RESTARTS} within ${STEAM_RESTART_WINDOW}s)..."
+    sleep 2
+done
