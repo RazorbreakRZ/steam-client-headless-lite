@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# =============================================================================
+# zenity wrapper (shadow in /usr/local/bin, ahead of /usr/bin on PATH)
+# -----------------------------------------------------------------------------
+# Debian's /usr/games/steam shows a blocking confirmation dialog on first run:
+#
+#   zenity --question --title="Steam installer" ... --ok-label=Install \
+#          --cancel-label=Cancel --default-cancel
+#
+# In a headless container nobody can click "Install", so it blocks forever
+# (black screen in noVNC) and, if answered Cancel, the script aborts with
+# "Installation cancelled". We intercept ONLY that specific dialog and answer
+# "Install" automatically (exit 0). Every other zenity call is passed straight
+# through to the real zenity binary, so Steam's other dialogs are unaffected.
+#
+# The real binary is relocated to /usr/bin/zenity.real by the Dockerfile.
+# =============================================================================
+REAL_ZENITY="/usr/bin/zenity.real"
+
+# Detect the Steam installer confirmation dialog: a --question dialog whose
+# title is "Steam installer". Scan all args so flag order doesn't matter.
+is_steam_installer_question=0
+has_question=0
+has_steam_title=0
+for arg in "$@"; do
+    case "$arg" in
+        --question) has_question=1 ;;
+        --title=*)
+            [[ "${arg#--title=}" == "Steam installer" ]] && has_steam_title=1
+            ;;
+        "Steam installer") has_steam_title=1 ;;
+    esac
+done
+if [[ "${has_question}" -eq 1 && "${has_steam_title}" -eq 1 ]]; then
+    is_steam_installer_question=1
+fi
+
+if [[ "${is_steam_installer_question}" -eq 1 ]]; then
+    # Auto-accept "Install" (zenity --question returns 0 for OK/ok-label).
+    echo "[zenity-wrapper] auto-accepting Steam installer confirmation" >&2
+    exit 0
+fi
+
+# Everything else: defer to the real zenity if present, otherwise succeed
+# quietly so we never reintroduce a hang.
+if [[ -x "${REAL_ZENITY}" ]]; then
+    exec "${REAL_ZENITY}" "$@"
+fi
+exit 0

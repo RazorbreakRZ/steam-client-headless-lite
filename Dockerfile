@@ -135,7 +135,17 @@ COPY root/etc/ /etc/
 # invalidates these two trailing layers.
 # -----------------------------------------------------------------------------
 COPY root/app/ /app/
-RUN chmod +x /app/*.sh
+RUN set -eux; \
+    chmod +x /app/*.sh; \
+    # Relocate the real zenity so our /usr/local/bin/zenity wrapper (copied via
+    # root/usr/ above, and ahead of /usr/bin on PATH) can auto-accept Debian's
+    # "Steam installer" confirmation dialog while passing every other zenity
+    # call through to the real binary. steam-installer depends on zenity|yad so
+    # the real binary is guaranteed present.
+    if [ -x /usr/bin/zenity ] && [ ! -e /usr/bin/zenity.real ]; then \
+        mv /usr/bin/zenity /usr/bin/zenity.real; \
+    fi; \
+    chmod +x /usr/local/bin/zenity
 
 # -----------------------------------------------------------------------------
 # Runtime ENV defaults (overridable at `docker run`/compose). These sit BELOW
