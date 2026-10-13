@@ -197,16 +197,22 @@ maximiser() {
     local rest="${SCREEN_RES#*x}"
     h="${rest%%x*}"                        # e.g. 800
     deadline=$(( $(date +%s) + 600 ))      # actively fix for the first 10 min
+    # Steam's CEF windows are often override-redirect: the window manager and
+    # wmctrl (EWMH) cannot see or move them. xdotool operates on the raw X
+    # window ID, so it CAN resize/move them. We search by window class and
+    # resize every steamwebhelper window to fill the screen, skipping the tiny
+    # helper/placeholder windows is unnecessary — enlarging them is harmless.
     while :; do
         [[ "${shutting_down}" -eq 1 ]] && return 0
-        # Find windows whose class is steam/steamwebhelper and force size+pos.
         while read -r wid; do
             [[ -n "${wid}" ]] || continue
-            wmctrl -i -r "${wid}" -e "0,0,0,${w},${h}" 2>/dev/null || true
-            wmctrl -i -r "${wid}" -b add,maximized_vert,maximized_horz 2>/dev/null || true
+            # Resize + move by raw window ID (works on override-redirect windows).
+            xdotool windowsize "${wid}" "${w}" "${h}" 2>/dev/null || true
+            xdotool windowmove "${wid}" 0 0 2>/dev/null || true
         done < <(
-            DISPLAY="${DISPLAY}" wmctrl -lx 2>/dev/null \
-                | awk 'tolower($3) ~ /steamwebhelper|^steam\./ {print $1}'
+            # Match the steamwebhelper window class on display :99. --onlyvisible
+            # avoids the hidden helper windows.
+            xdotool search --onlyvisible --class "steamwebhelper" 2>/dev/null
         )
         if (( $(date +%s) > deadline )); then
             sleep 15
