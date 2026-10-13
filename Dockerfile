@@ -26,6 +26,9 @@ LABEL org.opencontainers.image.title="Steam Headless Lite" \
 ENV DEBIAN_FRONTEND=noninteractive \
     LIBGL_ALWAYS_SOFTWARE=1 \
     GALLIUM_DRIVER=llvmpipe \
+    # steam-installer puts the launcher in /usr/games; make sure it's on PATH
+    # (run.sh also resolves the binary explicitly as a belt-and-suspenders).
+    PATH="/usr/games:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     # ----- Runtime defaults (overridable at `docker run`/compose) -----
     PUID=1000 \
     PGID=1000 \
@@ -103,6 +106,11 @@ RUN set -eux; \
     useradd -u "${PUID}" -g "${PGID}" -d /config -s /usr/sbin/nologin -M steam; \
     mkdir -p /config /data; \
     chown -R steam:steam /config /data; \
+    # X11 unix socket dir: pre-create with the sticky bit so Xvfb (running as the
+    # non-root steam user) doesn't warn "euid != 0 ... /tmp/.X11-unix will not be
+    # created" and so the socket lands in a dir everyone can use.
+    mkdir -p /tmp/.X11-unix; \
+    chmod 1777 /tmp/.X11-unix; \
     # --- slim down ---
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \

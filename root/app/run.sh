@@ -166,10 +166,28 @@ PIDS+=("${NOVNC_PID}")
 #    First run: Steam shows the Subscriber Agreement in the noVNC window; the
 #    user accepts it, logs in (user/password/Steam Guard), then adds /data as a
 #    library folder. The authenticated session persists under /config (HOME).
+#
+#    Debian's steam-installer places the launcher at /usr/games/steam, which is
+#    NOT on the default PATH for the non-root user in a slim image (that caused
+#    an earlier `steam: command not found` / exit 127). Resolve the binary
+#    explicitly across the known locations instead of relying on PATH.
 # ---------------------------------------------------------------------------
-log "starting Steam client (args: ${STEAM_ARGS})"
+STEAM_BIN=""
+for candidate in /usr/games/steam /usr/bin/steam /usr/local/bin/steam; do
+    if [[ -x "${candidate}" ]]; then
+        STEAM_BIN="${candidate}"
+        break
+    fi
+done
+# Last resort: whatever is on PATH, if any.
+if [[ -z "${STEAM_BIN}" ]]; then
+    STEAM_BIN="$(command -v steam || true)"
+fi
+[[ -n "${STEAM_BIN}" ]] || die "Steam launcher not found (looked in /usr/games/steam, /usr/bin/steam, /usr/local/bin/steam and PATH)."
+
+log "starting Steam client: ${STEAM_BIN} ${STEAM_ARGS}"
 # shellcheck disable=SC2086
-steam ${STEAM_ARGS} &
+"${STEAM_BIN}" ${STEAM_ARGS} &
 STEAM_PID=$!
 PIDS+=("${STEAM_PID}")
 
