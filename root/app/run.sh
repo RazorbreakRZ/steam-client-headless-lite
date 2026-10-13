@@ -210,9 +210,10 @@ maximiser() {
             xdotool windowsize "${wid}" "${w}" "${h}" 2>/dev/null || true
             xdotool windowmove "${wid}" 0 0 2>/dev/null || true
         done < <(
-            # Match the steamwebhelper window class on display :99. --onlyvisible
-            # avoids the hidden helper windows.
-            xdotool search --onlyvisible --class "steamwebhelper" 2>/dev/null
+            # Match the steamwebhelper window class on display :99. We do NOT use
+            # --onlyvisible: Steam's CEF UI window is override-redirect and that
+            # filter hides it. Search by class catches it by raw window ID.
+            xdotool search --class "steamwebhelper" 2>/dev/null
         )
         if (( $(date +%s) > deadline )); then
             sleep 15
