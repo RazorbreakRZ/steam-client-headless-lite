@@ -57,7 +57,7 @@ Xvfb  ->  Openbox  ->  x11vnc  ->  noVNC/websockify  ->  Steam client
    docker compose up -d
    ```
 
-3. Open the web UI at `http://<host>:8080/vnc.html` and follow
+3. Open the web UI at `http://<host>:28080/vnc.html` and follow
    [First-run setup](#first-run-setup).
 
 ### With docker run
@@ -67,10 +67,10 @@ docker run -d \
   --name steam-headless-lite \
   --network host \
   -e PUID=1000 -e PGID=1000 -e TZ=Europe/Madrid \
-  -e WEB_PORT=8080 \
+  -e WEB_PORT=28080 \
   -v steam-config:/config \
   -v /path/to/your/library:/data \
-  CHANGE_ME/steam-client-headless-lite:latest
+  razorbreak/steam-client-headless-lite:latest
 ```
 
 > **Host networking is required** for native LAN sharing (see below). Make sure
@@ -78,7 +78,7 @@ docker run -d \
 
 ## First-run setup
 
-Open `http://<host>:8080/vnc.html` and, **in this order**:
+Open `http://<host>:28080/vnc.html` and, **in this order**:
 
 1. **Accept the Steam Subscriber Agreement.** On first launch the Steam client
    shows its license / Subscriber Agreement dialog in the noVNC window. This is
@@ -114,6 +114,12 @@ updates to the other, avoiding a re-download from the internet.
 - Relevant native Steam ports (used directly on the host under host networking):
   TCP/UDP `27015`–`27036`, UDP `27031`–`27036`, and the `~27036`/`~27040`
   discovery + transfer pair.
+- **Web UI ports are deliberately uncommon.** Because host networking means the
+  container binds the host's ports directly, the defaults avoid popular ports
+  that commonly collide (8080, 5900, 9000, 8443, etc.): the web UI defaults to
+  **`28080`** and the internal VNC port to **`28090`**. Both sit above Steam's
+  native LAN port range, so there is no overlap. Override `WEB_PORT`/`VNC_PORT`
+  if those are taken on your host.
 
 > **LanCache alternative.** If native peer-to-peer sharing doesn't fit your
 > setup (e.g. you can't use host networking, or you want to cache the Steam CDN
@@ -129,8 +135,8 @@ updates to the other, avoiding a re-download from the internet.
 | `PGID`           | `1000`         | GID that owns files on the volumes. |
 | `UMASK`          | `022`          | File-creation mask. |
 | `TZ`             | `Etc/UTC`      | Timezone, e.g. `Europe/Madrid`. |
-| `WEB_PORT`       | `8080`         | noVNC web UI port on the host. |
-| `VNC_PORT`       | `5900`         | Internal VNC (RFB) port. |
+| `WEB_PORT`       | `28080`        | noVNC web UI port on the host. Deliberately uncommon to avoid clashes under host networking. |
+| `VNC_PORT`       | `28090`        | Internal VNC (RFB) port. Deliberately uncommon (not the 5900 VNC default). |
 | `DISPLAY_NUM`    | `99`           | X display number for Xvfb. |
 | `SCREEN_RES`     | `1280x800x24`  | Virtual screen `WIDTHxHEIGHTxDEPTH`. |
 | `VNC_PASSWORD`   | *(empty)*      | Optional VNC password. **Required** if `VNC_EXPOSE=true`. |
@@ -183,7 +189,7 @@ The published image is
 `${{ secrets.DOCKERHUB_USERNAME }}/steam-client-headless-lite`. The namespace
 comes from the `DOCKERHUB_USERNAME` secret; to change the repository component,
 edit the `images:` line in `docker-publish.yml`. Also update the `image:` field
-in `docker-compose.yml` (replace `CHANGE_ME`).
+in `docker-compose.yml` (replace `razorbreak`).
 
 ### Cutting a release
 

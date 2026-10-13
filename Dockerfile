@@ -14,7 +14,7 @@ FROM debian:bookworm-slim
 
 LABEL org.opencontainers.image.title="Steam Headless Lite" \
       org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
-      org.opencontainers.image.source="https://github.com/CHANGE_ME/steam-client-headless-lite" \
+      org.opencontainers.image.source="https://github.com/RazorbreakRZ/steam-client-headless-lite" \
       org.opencontainers.image.licenses="MIT"
 
 # Non-interactive apt is the real safety net here. steam-installer's only debconf
@@ -31,8 +31,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PGID=1000 \
     UMASK=022 \
     TZ=Etc/UTC \
-    WEB_PORT=8080 \
-    VNC_PORT=5900 \
+    # High, uncommon defaults chosen so they don't collide with typical host
+    # services under network_mode: host (8080/5900 clash with proxies, panels,
+    # and real VNC servers; these also sit above Steam's native LAN port range).
+    WEB_PORT=28080 \
+    VNC_PORT=28090 \
     DISPLAY_NUM=99 \
     SCREEN_RES=1280x800x24 \
     VNC_PASSWORD="" \
@@ -111,10 +114,10 @@ RUN chmod +x /app/*.sh
 
 VOLUME ["/config", "/data"]
 
-# Documentation only; actual published port is WEB_PORT (default 8080). Under the
+# Documentation only; actual published port is WEB_PORT (default 28080). Under the
 # recommended network_mode: host these EXPOSE lines are informational.
-EXPOSE 8080
-EXPOSE 5900
+EXPOSE 28080
+EXPOSE 28090
 
 # Web UI readiness. noVNC has no index.html of its own, hence the /vnc.html target.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=5 \

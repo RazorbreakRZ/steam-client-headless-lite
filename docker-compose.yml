@@ -12,7 +12,7 @@ name: steam-headless-lite
 services:
   steam-headless-lite:
     # Change the namespace to your Docker Hub user/org before publishing.
-    image: CHANGE_ME/steam-client-headless-lite:latest
+    image: razorbreak/steam-client-headless-lite:latest
     container_name: steam-headless-lite
     network_mode: host
     environment:
@@ -20,8 +20,8 @@ services:
       - PGID=1000
       - UMASK=022
       - TZ=Etc/UTC
-      - WEB_PORT=8080         # noVNC web UI port on the host
-      - VNC_PORT=5900
+      - WEB_PORT=28080        # noVNC web UI port on the host (uncommon, avoids clashes)
+      - VNC_PORT=28090
       - SCREEN_RES=1280x800x24
       # Expose the raw VNC port to the LAN only if you set a password:
       - VNC_EXPOSE=false
@@ -46,8 +46,8 @@ x-casaos:
   architectures:
     - amd64
   main: steam-headless-lite
-  author: CHANGE_ME
-  developer: CHANGE_ME
+  author: RazorbreakRZ
+  developer: RazorbreakRZ
   category: Gaming
   title:
     en_us: Steam Headless Lite
@@ -62,22 +62,22 @@ x-casaos:
       Steam Subscriber Agreement on first launch, log in with Steam Guard, add
       /data as a library folder, and let it download. Requires host networking
       for LAN peer discovery.
-  icon: https://raw.githubusercontent.com/CHANGE_ME/steam-client-headless-lite/main/.github/icon.png
+  icon: https://raw.githubusercontent.com/RazorbreakRZ/steam-client-headless-lite/main/.github/icon.png
   screenshot_link: []
   scheme: http
-  port_map: "8080"
+  port_map: "28080"
   index: /vnc.html
   tips:
     before_install:
       en_us: >-
         Host networking is required for native Steam LAN content sharing. Make
-        sure the WEB_PORT (default 8080) is free on the host. On first launch,
+        sure the WEB_PORT (default 28080) is free on the host. On first launch,
         open the web UI, accept the Steam Subscriber Agreement, log in, and add
         /data as a Steam library folder.
   envs:
     - container: WEB_PORT
       description:
-        en_us: Port for the noVNC web UI on the host (default 8080).
+        en_us: Port for the noVNC web UI on the host (default 28080).
     - container: PUID
       description:
         en_us: User ID that owns files on the volumes.
