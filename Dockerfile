@@ -177,16 +177,16 @@ ENV LIBGL_ALWAYS_SOFTWARE=1 \
     VNC_EXPOSE=false \
     CHOWN_ON_START=true \
     # STEAM_ARGS notes:
-    #  -no-browser       : don't open the built-in web browser on launch.
-    #  -cef-disable-gpu  : CRITICAL for headless. Under Xvfb + llvmpipe,
-    #                      steamwebhelper's CEF renders its surfaces BLACK (the
-    #                      window is up and menus work, but the UI never paints)
-    #                      because ANGLE tries a GL backend that produces no
-    #                      visible surface. Disabling CEF's GPU path forces a
-    #                      software raster that actually paints. See Valve
-    #                      steam-for-linux issue #10561.
-    #  Do NOT use -silent: it minimises Steam to a (nonexistent) tray -> black.
-    STEAM_ARGS="-no-browser -cef-disable-gpu"
+    #  -no-browser         : don't open the built-in web browser on launch.
+    #  -cef-force-gpu-mesa : headless render fix. Under Xvfb + llvmpipe,
+    #                        steamwebhelper's CEF renders BLACK. Plain
+    #                        -cef-disable-gpu was not enough (the GPU process
+    #                        still tried to init and failed: viz_main_impl.cc
+    #                        "Exiting GPU process due to errors"). Forcing CEF to
+    #                        use the Mesa (software/llvmpipe) GL driver points
+    #                        the GPU process at a backend that actually works.
+    #  Do NOT use -silent  : it minimises Steam to a (nonexistent) tray -> black.
+    STEAM_ARGS="-no-browser -cef-force-gpu-mesa"
 
 LABEL org.opencontainers.image.title="Steam Headless Lite" \
       org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
