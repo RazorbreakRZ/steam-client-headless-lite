@@ -176,10 +176,17 @@ ENV LIBGL_ALWAYS_SOFTWARE=1 \
     VNC_PASSWORD="" \
     VNC_EXPOSE=false \
     CHOWN_ON_START=true \
-    # NOTE: do NOT use -silent here. -silent starts Steam minimised to the
-    # system tray, but Openbox is a bare WM with no tray, so the window never
-    # shows and noVNC displays only a black screen. We want the window visible.
-    STEAM_ARGS="-no-browser"
+    # STEAM_ARGS notes:
+    #  -no-browser       : don't open the built-in web browser on launch.
+    #  -cef-disable-gpu  : CRITICAL for headless. Under Xvfb + llvmpipe,
+    #                      steamwebhelper's CEF renders its surfaces BLACK (the
+    #                      window is up and menus work, but the UI never paints)
+    #                      because ANGLE tries a GL backend that produces no
+    #                      visible surface. Disabling CEF's GPU path forces a
+    #                      software raster that actually paints. See Valve
+    #                      steam-for-linux issue #10561.
+    #  Do NOT use -silent: it minimises Steam to a (nonexistent) tray -> black.
+    STEAM_ARGS="-no-browser -cef-disable-gpu"
 
 LABEL org.opencontainers.image.title="Steam Headless Lite" \
       org.opencontainers.image.description="Headless Steam client for downloading and LAN-sharing a game library. No game execution, no GPU drivers." \
