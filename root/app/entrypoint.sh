@@ -73,5 +73,18 @@ else
     log "CHOWN_ON_START=false; skipping ownership fixup"
 fi
 
+# ---- Pre-accept the Debian steam-installer confirmation dialog ----
+# Debian's /usr/games/steam shows a blocking zenity "Install?" dialog (default
+# = Cancel) the first time, when the install dir does not yet exist. In a
+# headless container that dialog just blocks forever (black screen in noVNC).
+# Pre-creating the install directory makes the script skip the prompt and go
+# straight to downloading the client. Done as the steam user so ownership is
+# correct. Harmless on subsequent starts (dir already exists).
+STEAM_INSTALL_DIR="/config/.steam/debian-installation"
+if [[ ! -d "${STEAM_INSTALL_DIR}" ]]; then
+    log "pre-creating ${STEAM_INSTALL_DIR} to skip the installer confirmation dialog"
+    /usr/sbin/gosu steam mkdir -p "${STEAM_INSTALL_DIR}"
+fi
+
 log "handing off to run.sh as user steam (uid=${PUID} gid=${PGID})"
 exec /usr/sbin/gosu steam /app/run.sh
