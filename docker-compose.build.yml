@@ -36,6 +36,10 @@ services:
       - apparmor=unconfined
     cap_add:
       - SYS_ADMIN
+    # Chromium/CEF (steamwebhelper) + SwiftShader need a large /dev/shm. Docker's
+    # 64MB default makes the GPU process crash on init ("Exiting GPU process due
+    # to errors during initialization"), leaving the Steam UI black. 2GB is ample.
+    shm_size: "2gb"
     environment:
       - PUID=1000
       - PGID=1000
