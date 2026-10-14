@@ -43,17 +43,23 @@ services:
       - VNC_EXPOSE=false
       - VNC_PASSWORD=
       - CHOWN_ON_START=true
+    # IMPORTANT: use BIND MOUNTS to explicit host paths you control, NOT named
+    # volumes and NEVER a path inside this repo. Reason: when you UNINSTALL the
+    # app, CasaOS deletes the app's data directory recursively. If that path sits
+    # inside a git checkout (or is your real library), you lose it. Keep CONFIG
+    # under a disposable app-data dir, and point DATA at your real library — a
+    # path that lives on its own, well away from any code.
+    #
+    # Override these with env vars (or edit the defaults):
+    #   CONFIG_DIR  Steam session/config  (losing it only means re-login)
+    #   DATA_DIR    the game library       (your real SteamLibrary — keep it safe)
     volumes:
-      - steam-config:/config  # Steam session + client config (keeps you logged in)
-      - steam-data:/data      # the game library (steamapps). Point this at your storage.
+      - ${CONFIG_DIR:-/DATA/AppData/steam-headless-lite/config}:/config
+      - ${DATA_DIR:-/DATA/SteamLibrary}:/data
     restart: unless-stopped
     # Under network_mode: host the ports below are informational; the container
     # listens on WEB_PORT/VNC_PORT directly on the host. Steam LAN ports used
     # natively: UDP/TCP 27015-27036, UDP 27031-27036, ~27036/27040 discovery+xfer.
-
-volumes:
-  steam-config:
-  steam-data:
 
 # -----------------------------------------------------------------------------
 # CasaOS application metadata. Lets this compose import cleanly as a CasaOS app.

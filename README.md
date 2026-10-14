@@ -166,6 +166,16 @@ with a logged-in-but-blank Steam window, this is the first thing to check.
 | `/config` | `HOME` for the `steam` user: Steam session + client config. Keeps you logged in. Back this up to preserve your session. |
 | `/data`   | The game library (`steamapps/`). Point this at your bulk storage. |
 
+> ⚠️ **Data-loss warning — mount paths matter.** Bind `/config` and `/data` to
+> explicit host paths you control, and **never** to a path inside a git checkout
+> or anything else you can't afford to lose. When you **uninstall** the app in
+> CasaOS, it deletes the app's data directory **recursively** — if that path sat
+> inside your project folder, the whole folder goes with it. Keep `/config` in a
+> disposable app-data location (losing it only means logging in again) and point
+> `/data` at your real library, which should live on its own, well away from any
+> code. Prefer bind mounts over named volumes so you always know exactly where
+> your data is.
+
 ## Typical workflow
 
 1. **Download / keep games on this node.** Install titles from the Steam library
