@@ -73,5 +73,25 @@ else
     log "CHOWN_ON_START=false; skipping ownership fixup"
 fi
 
+# ---- Register /data as a Steam library folder (pre-seed) ----
+# Steam only looks for installed games in the folders listed in
+# libraryfolders.vdf, and its headless GUI will not let you type an arbitrary
+# path to add one. So, with Steam NOT yet running, we register /data ourselves:
+#   1. drop a libraryfolder.vdf marker inside /data/steamapps
+#   2. add a "/data" entry to the global libraryfolders.vdf (idempotent)
+# Only done when /data/steamapps exists (i.e. a real library is mounted). Steam
+# recalculates the per-library "apps" list from the appmanifest_*.acf files on
+# start, so we only need to register the PATH, not every app.
+STEAM_LIBVDF="/config/.steam/debian-installation/steamapps/libraryfolders.vdf"
+if [[ -d /data/steamapps ]]; then
+    if [[ ! -f "${STEAM_LIBVDF}" ]] || ! grep -q '"/data"' "${STEAM_LIBVDF}"; then
+        log "registering /data as a Steam library folder in libraryfolders.vdf"
+        /usr/sbin/gosu steam env DATA_DIR=/data LIBVDF="${STEAM_LIBVDF}" bash /app/seed-library.sh \
+            || warn "could not pre-seed the Steam library; you may need to add it in the UI"
+    else
+        log "/data already registered as a Steam library"
+    fi
+fi
+
 log "handing off to run.sh as user steam (uid=${PUID} gid=${PGID})"
 exec /usr/sbin/gosu steam /app/run.sh
