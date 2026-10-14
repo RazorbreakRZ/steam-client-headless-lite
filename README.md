@@ -283,6 +283,25 @@ redirects into the client with the same autoconnect parameters.
 docker build -t steam-client-headless-lite:local .
 ```
 
+For local build + startup testing there is a dedicated compose file
+(`docker-compose.build.yml`) that builds from the local Dockerfile instead of
+pulling from Docker Hub:
+
+```bash
+docker compose -f docker-compose.build.yml up --build
+```
+
+To clean up development leftovers (the test container, the `:local` image, and
+optionally the build cache / `./.local` test data), use the helper script. It is
+a dry-run by default and only acts with `--execute`:
+
+```bash
+./scripts/clean-local.sh                    # show what would be removed
+./scripts/clean-local.sh --execute          # remove container + :local image
+./scripts/clean-local.sh --execute --deep   # also prune the BuildKit cache
+./scripts/clean-local.sh --execute --data   # also delete ./.local test data
+```
+
 ## GitHub Actions / publishing
 
 Two workflows are provided:
