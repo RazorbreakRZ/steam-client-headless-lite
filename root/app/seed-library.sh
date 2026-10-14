@@ -28,20 +28,22 @@ log() { echo "[seed-library] $*"; }
 mkdir -p "$(dirname "${LIBVDF}")"
 mkdir -p "${DATA_DIR}/steamapps"
 
-# --- marker inside the library folder ---
-# Steam drops a libraryfolder.vdf (singular) in each library's steamapps/.
-# A minimal one with contentid 0 is accepted; Steam rewrites it with real
-# values on first scan.
-if [[ ! -f "${DATA_DIR}/steamapps/libraryfolder.vdf" ]]; then
-    cat > "${DATA_DIR}/steamapps/libraryfolder.vdf" <<'EOF'
+# --- marker in the library ROOT ---
+# Steam places libraryfolder.vdf (singular) in the ROOT of each library folder,
+# i.e. ${DATA_DIR}/libraryfolder.vdf — NOT inside steamapps/. A minimal one with
+# contentid 0 is accepted; Steam rewrites it with the real contentid on scan.
+if [[ ! -f "${DATA_DIR}/libraryfolder.vdf" ]]; then
+    cat > "${DATA_DIR}/libraryfolder.vdf" <<'EOF'
 "libraryfolder"
 {
 	"contentid"		"0"
 	"label"		""
 }
 EOF
-    log "wrote ${DATA_DIR}/steamapps/libraryfolder.vdf"
+    log "wrote ${DATA_DIR}/libraryfolder.vdf"
 fi
+# Remove the misplaced marker a previous version wrote inside steamapps/.
+rm -f "${DATA_DIR}/steamapps/libraryfolder.vdf" 2>/dev/null || true
 
 # --- preserve the internal library's contentid if we already have one ---
 internal_path="${STEAM_ROOT}"
