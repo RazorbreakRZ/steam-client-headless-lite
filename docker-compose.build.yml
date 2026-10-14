@@ -50,13 +50,14 @@ services:
       - SCREEN_RES=1280x800x24
       - VNC_EXPOSE=false
       - VNC_PASSWORD=
-      # First boot does a recursive chown of /config; on a fresh empty volume
-      # this is instant. Set false if you ever point /config at a huge tree and
-      # the chown makes startup look stuck.
-      - CHOWN_ON_START=true
+      # If you mount an existing/de-migrated library (already owned by PUID:PGID),
+      # set CHOWN_ON_START=false to skip the recursive chown (slow on large libs).
+      - CHOWN_ON_START=${CHOWN_ON_START:-true}
     volumes:
-      # Local bind mounts so you can inspect what the container writes while
-      # debugging. Created on first run next to this compose file.
+      # Steam session/config (keeps you logged in). Local bind for debugging.
       - ./.local/config:/config
-      - ./.local/data:/data
+      # Library mounted as /data. Defaults to a local test dir; override with the
+      # DATA_DIR env var to point at a real (e.g. de-migrated) SteamLibrary, e.g.:
+      #   DATA_DIR=/srv/SteamLibrary docker compose -f docker-compose.build.yml up
+      - ${DATA_DIR:-./.local/data}:/data
     restart: "no"
