@@ -59,8 +59,8 @@ services:
     #   CONFIG_DIR  Steam session/config  (losing it only means re-login)
     #   DATA_DIR    the game library       (your real SteamLibrary — keep it safe)
     volumes:
-      - ${CONFIG_DIR:-/DATA/AppData/steam-headless-lite/config}:/config
-      - ${DATA_DIR:-/DATA/SteamLibrary}:/data
+      - /DATA/AppData/steam-headless-lite/config:/config
+      - /DATA/SteamLibrary:/data
     restart: unless-stopped
     # Under network_mode: host the ports below are informational; the container
     # listens on WEB_PORT/VNC_PORT directly on the host. Steam LAN ports used
