@@ -166,6 +166,50 @@ with a logged-in-but-blank Steam window, this is the first thing to check.
 | `/config` | `HOME` for the `steam` user: Steam session + client config. Keeps you logged in. Back this up to preserve your session. |
 | `/data`   | The game library (`steamapps/`). Point this at your bulk storage. |
 
+## Typical workflow
+
+1. **Download / keep games on this node.** Install titles from the Steam library
+   in the web UI; they land in `/data/steamapps/`. Updates that this node itself
+   downloads are stored complete (with their depot manifests under
+   `/config/.../depotcache`), so later verification and LAN transfers are optimal.
+2. **The node acts as a backup.** The games stay on your bulk storage even if you
+   uninstall them elsewhere.
+3. **Seed other clients over the LAN.** With Local Network Game Transfers enabled
+   on both ends, a Steam Deck (or any client) re-installs from this node instead
+   of the internet.
+
+### Importing an existing library (optional)
+
+If you already have games downloaded elsewhere (e.g. a SteamCMD mirror), you can
+drop them into `/data` so Steam picks them up as installed, instead of
+re-downloading from scratch. The library must follow Steam's layout:
+
+```
+/data/
+├── libraryfolder.vdf                 (created automatically on start)
+└── steamapps/
+    ├── appmanifest_<appid>.acf
+    ├── depotcache/<depotid>_<manifest>.manifest   (if available — enables delta)
+    └── common/<installdir>/
+```
+
+Notes and caveats:
+
+- On start the node **auto-registers `/data`** in `libraryfolders.vdf`, so you do
+  not need to add it through the UI (the headless GUI won't let you type a path).
+- **Depot manifests matter.** If `steamapps/depotcache/<depotid>_<manifest>.manifest`
+  is present, Steam can verify the local content and download only missing/changed
+  chunks. Without it, Steam may re-download more (worst case, the whole depot),
+  because it cannot verify what you already have. A plain file copy of a game
+  usually does **not** include these manifests.
+- **Platform.** Content is transferred per depot. A Windows build (run via Proton
+  on Linux clients) is fine to store and seed; it matches what those clients
+  download.
+- A companion script, `revert-to-steamlibrary.sh` (in the `steam-games-downloader`
+  project), rebuilds this layout from a SteamCMD mirror, copies any available depot
+  manifests, and marks each game for a full validation so Steam reuses on-disk
+  content where it can.
+
 ## LAN content sharing
 
 This image relies on Steam's **native Local Network Game Transfers**: once two
@@ -185,6 +229,15 @@ updates to the other, avoiding a re-download from the internet.
   **`28080`** and the internal VNC port to **`28090`**. Both sit above Steam's
   native LAN port range, so there is no overlap. Override `WEB_PORT`/`VNC_PORT`
   if those are taken on your host.
+
+- **Enable it on both ends.** In Steam, *Settings → Downloads → Allow downloads
+  on local network* must be on in this node **and** in the receiving client
+  (e.g. a Steam Deck).
+- **Sharing is per depot, not per OS label.** A game is transferred as its
+  depot. A Windows-only title that a Steam Deck runs through Proton uses the
+  **Windows depot** on both sides, so this node can seed that depot to the Deck
+  over the LAN. In other words, storing the Windows build of a Proton game is
+  useful: it is the same content the Deck downloads.
 
 > **LanCache alternative.** If native peer-to-peer sharing doesn't fit your
 > setup (e.g. you can't use host networking, or you want to cache the Steam CDN
@@ -298,6 +351,14 @@ treated as fatal.
 (`steamwebhelper`) can open small; a background maximiser in `run.sh` resizes it
 to fill the screen. If it misbehaves, the window class to target is
 `steamwebhelper`.
+
+**Some dialogs/dropdowns don't respond to the mouse** (e.g. a game's Properties
+window, certain dropdowns). This is a known limitation of Steam's CEF/Chromium
+UI under software rendering over noVNC — some modal widgets don't take mouse
+input reliably. Workaround: **use the keyboard**. Tab / Shift+Tab to move between
+fields, arrow keys to change dropdowns, Space/Enter to toggle/confirm, Esc to
+close. The main library, install, and settings flows work fine with the mouse;
+only a few nested modals need the keyboard.
 
 ## License
 
