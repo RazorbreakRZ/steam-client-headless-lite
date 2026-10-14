@@ -287,6 +287,19 @@ with `autoconnect=true`, so no "Connect" button is shown — the session connect
 automatically. Opening the web root `/` works too: a bundled `index.html`
 redirects into the client with the same autoconnect parameters.
 
+> **CasaOS doesn't show every field in its form.** The import UI does not display
+> `security_opt`, `cap_add` or `shm_size`, but it **does apply them** to the
+> container. They're required for the client to start (user namespaces + CEF
+> rendering), so don't remove them from the compose just because the form hides
+> them. To confirm they took effect:
+>
+> ```bash
+> docker inspect steam-headless-lite \
+>   --format 'shm={{.HostConfig.ShmSize}} caps={{.HostConfig.CapAdd}} secopt={{.HostConfig.SecurityOpt}}'
+> ```
+>
+> `shm` should read `2147483648` (2 GB).
+
 ## Building locally
 
 ```bash

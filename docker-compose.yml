@@ -22,6 +22,11 @@ services:
     # Relaxing both and granting SYS_ADMIN is required for the Steam client to
     # start. The host must also allow unprivileged user namespaces (on Debian/
     # Ubuntu: sysctl kernel.unprivileged_userns_clone=1, usually the default).
+    #
+    # NOTE on CasaOS: its import UI does NOT display these fields (security_opt,
+    # cap_add, shm_size) in the form, but it DOES apply them to the container.
+    # Don't be alarmed that they're not visible in the UI — verify with
+    # `docker inspect <container>` if in doubt.
     security_opt:
       - seccomp=unconfined
       - apparmor=unconfined
